@@ -4,8 +4,8 @@
   "description": "Convex backend for storing OpenClaw messages from all channels",
   "private": true,
   "scripts": {
-    "dev": "convex dev",
-    "deploy": "convex deploy"
+    "dev": "bunx convex dev",
+    "deploy": "bunx convex deploy"
   },
   "dependencies": {
     "convex": "^1.17.0"

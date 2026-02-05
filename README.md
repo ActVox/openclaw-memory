@@ -5,8 +5,8 @@ Convex backend for storing messages from all OpenClaw channels (Telegram, Slack,
 ## Setup
 
 ```bash
-npm install
-npx convex dev
+bun install
+bun run dev
 ```
 
 This will create a new Convex deployment and give you:
