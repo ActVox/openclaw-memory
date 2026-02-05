@@ -204,4 +204,36 @@ http.route({
   }),
 });
 
+/**
+ * POST /embeddings/generate-all - Generate embeddings for all messages without them
+ * 
+ * Body: {
+ *   limit?: number (default 100)
+ * }
+ */
+http.route({
+  path: "/embeddings/generate-all",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json().catch(() => ({}));
+      
+      const result = await ctx.runAction(api.vectorSearch.embedAll, {
+        limit: body.limit ?? 100,
+      });
+      
+      return new Response(JSON.stringify({ ok: true, ...result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error generating embeddings:", error);
+      return new Response(JSON.stringify({ error: String(error) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;
