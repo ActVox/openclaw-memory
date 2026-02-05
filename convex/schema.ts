@@ -28,12 +28,20 @@ export default defineSchema({
     
     // Metadata
     metadata: v.optional(v.any()),  // Platform-specific extras
+    
+    // Vector embedding for semantic search
+    embedding: v.optional(v.array(v.float64())), // 1536 dims for text-embedding-3-small
   })
     .index("by_platform_group", ["platform", "groupId"])
     .index("by_platform_group_thread", ["platform", "groupId", "threadId"])
     .index("by_timestamp", ["timestamp"])
     .index("by_author", ["platform", "authorId"])
-    .index("by_message_id", ["platform", "messageId"]),
+    .index("by_message_id", ["platform", "messageId"])
+    .vectorIndex("by_embedding", { 
+      vectorField: "embedding", 
+      dimensions: 1536,
+      filterFields: ["platform", "groupId", "authorId"]
+    }),
     
   // Track sync state per source
   syncState: defineTable({

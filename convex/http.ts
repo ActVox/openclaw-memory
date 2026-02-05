@@ -159,4 +159,49 @@ http.route({
   }),
 });
 
+/**
+ * POST /search - Semantic vector search
+ * 
+ * Body: {
+ *   query: string,
+ *   platform?: string,
+ *   groupId?: string,
+ *   limit?: number
+ * }
+ */
+http.route({
+  path: "/search",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = await request.json();
+      
+      if (!body.query) {
+        return new Response(JSON.stringify({ error: "query required" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      
+      const results = await ctx.runAction(api.vectorSearch.search, {
+        query: body.query,
+        platform: body.platform,
+        groupId: body.groupId,
+        limit: body.limit,
+      });
+      
+      return new Response(JSON.stringify(results), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error in search:", error);
+      return new Response(JSON.stringify({ error: String(error) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
 export default http;
