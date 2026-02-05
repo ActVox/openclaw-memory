@@ -1,0 +1,16 @@
+{
+  "name": "openclaw-memory",
+  "version": "0.1.0",
+  "description": "Convex backend for storing OpenClaw messages from all channels",
+  "private": true,
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
