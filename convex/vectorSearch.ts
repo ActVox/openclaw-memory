@@ -1,5 +1,7 @@
+"use node";
+
 import { v } from "convex/values";
-import { action, internalMutation, internalQuery } from "./_generated/server";
+import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 /**
@@ -13,40 +15,59 @@ export const search = action({
     authorId: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Array<Record<string, unknown>>> => {
     // Get embedding for query
     const embedding = await getEmbedding(args.query);
-    
-    // Build filter
-    const filter: Record<string, string> = {};
-    if (args.platform) filter.platform = args.platform;
-    if (args.groupId) filter.groupId = args.groupId;
-    if (args.authorId) filter.authorId = args.authorId;
-    
-    // Vector search
-    const results = await ctx.vectorSearch("messages", "by_embedding", {
-      vector: embedding,
-      limit: args.limit ?? 10,
-      filter: Object.keys(filter).length > 0 
-        ? (q) => {
-            let f = q;
-            if (filter.platform) f = f.eq("platform", filter.platform);
-            if (filter.groupId) f = f.eq("groupId", filter.groupId);
-            if (filter.authorId) f = f.eq("authorId", filter.authorId);
-            return f;
-          }
-        : undefined,
-    });
-    
+    const searchLimit = (args.limit ?? 10) * 3; // Fetch more for post-filtering
+
+    // Vector search with optional single-field filter
+    // Convex vector search supports one filter at a time, so we pick most specific
+    let results;
+    if (args.authorId) {
+      results = await ctx.vectorSearch("messages", "by_embedding", {
+        vector: embedding,
+        limit: searchLimit,
+        filter: (q) => q.eq("authorId", args.authorId!),
+      });
+    } else if (args.groupId) {
+      results = await ctx.vectorSearch("messages", "by_embedding", {
+        vector: embedding,
+        limit: searchLimit,
+        filter: (q) => q.eq("groupId", args.groupId!),
+      });
+    } else if (args.platform) {
+      results = await ctx.vectorSearch("messages", "by_embedding", {
+        vector: embedding,
+        limit: searchLimit,
+        filter: (q) => q.eq("platform", args.platform!),
+      });
+    } else {
+      results = await ctx.vectorSearch("messages", "by_embedding", {
+        vector: embedding,
+        limit: searchLimit,
+      });
+    }
+
     // Fetch full documents
-    const messages = await Promise.all(
-      results.map(async (r) => {
-        const doc = await ctx.runQuery(internal.vectorSearch.getMessage, { id: r._id });
-        return { ...doc, _score: r._score };
-      })
-    );
-    
-    return messages.filter(Boolean);
+    const messages: Array<Record<string, unknown> & { _score: number }> = [];
+    for (const r of results) {
+      const doc = await ctx.runQuery(internal.vectorSearchHelpers.getMessage, {
+        id: r._id,
+      });
+      if (doc) {
+        messages.push({ ...doc, _score: r._score });
+      }
+    }
+
+    // Post-filter for additional conditions not covered by vector filter
+    const filtered = messages.filter((msg) => {
+      if (args.platform && msg.platform !== args.platform) return false;
+      if (args.groupId && msg.groupId !== args.groupId) return false;
+      if (args.authorId && msg.authorId !== args.authorId) return false;
+      return true;
+    });
+
+    return filtered.slice(0, args.limit ?? 10);
   },
 });
 
@@ -58,11 +79,14 @@ export const embedMessage = action({
     messageId: v.id("messages"),
   },
   handler: async (ctx, args) => {
-    const message = await ctx.runQuery(internal.vectorSearch.getMessage, { id: args.messageId });
+    const message = await ctx.runQuery(
+      internal.vectorSearchHelpers.getMessage,
+      { id: args.messageId }
+    );
     if (!message || message.embedding) return; // Skip if already embedded
-    
+
     const embedding = await getEmbedding(message.content);
-    await ctx.runMutation(internal.vectorSearch.updateEmbedding, {
+    await ctx.runMutation(internal.vectorSearchHelpers.updateEmbedding, {
       id: args.messageId,
       embedding,
     });
@@ -77,45 +101,24 @@ export const embedAll = action({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const messages = await ctx.runQuery(internal.vectorSearch.getUnembedded, { 
-      limit: args.limit ?? 100 
-    });
-    
+    const messages = await ctx.runQuery(
+      internal.vectorSearchHelpers.getUnembedded,
+      {
+        limit: args.limit ?? 100,
+      }
+    );
+
     let count = 0;
     for (const msg of messages) {
       const embedding = await getEmbedding(msg.content);
-      await ctx.runMutation(internal.vectorSearch.updateEmbedding, {
+      await ctx.runMutation(internal.vectorSearchHelpers.updateEmbedding, {
         id: msg._id,
         embedding,
       });
       count++;
     }
-    
+
     return { embedded: count };
-  },
-});
-
-// Internal helpers
-export const getMessage = internalQuery({
-  args: { id: v.id("messages") },
-  handler: async (ctx, args) => ctx.db.get(args.id),
-});
-
-export const getUnembedded = internalQuery({
-  args: { limit: v.number() },
-  handler: async (ctx, args) => {
-    const messages = await ctx.db.query("messages").take(args.limit * 10);
-    return messages.filter(m => !m.embedding).slice(0, args.limit);
-  },
-});
-
-export const updateEmbedding = internalMutation({
-  args: { 
-    id: v.id("messages"), 
-    embedding: v.array(v.float64()) 
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { embedding: args.embedding });
   },
 });
 
@@ -124,7 +127,7 @@ async function getEmbedding(text: string): Promise<number[]> {
   const response = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -132,10 +135,9 @@ async function getEmbedding(text: string): Promise<number[]> {
       input: text.slice(0, 8000), // Truncate to fit
     }),
   });
-  
+
   const data = await response.json();
   return data.data[0].embedding;
 }
 
-// Need to add to convex.config.ts or set in Convex dashboard:
-// OPENAI_API_KEY
+// Set OPENAI_API_KEY in Convex dashboard

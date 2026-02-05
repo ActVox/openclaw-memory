@@ -1,0 +1,78 @@
+# Environment variables (SENSITIVE - credentials, API keys, secrets)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+*.env
+.env.vault
+
+# Dependencies
+node_modules/
+
+# Convex generated files (auto-generated, do not commit)
+convex/_generated/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# IDE and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Cache
+.cache/
+*.cache
+.turbo/
+.eslintcache
+.prettiercache
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Secrets and credentials (additional patterns)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+*credentials*.json
+*secret*.json
+service-account*.json
