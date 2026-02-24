@@ -160,6 +160,29 @@ http.route({
 });
 
 /**
+ * POST /normalize - Normalize all groupIds to canonical format
+ */
+http.route({
+  path: "/normalize",
+  method: "POST",
+  handler: httpAction(async (ctx) => {
+    try {
+      const result = await ctx.runMutation(api.messages.normalizeGroupIds, {});
+      return new Response(JSON.stringify({ ok: true, ...result }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Error normalizing:", error);
+      return new Response(JSON.stringify({ error: String(error) }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }),
+});
+
+/**
  * POST /search - Semantic vector search
  * 
  * Body: {

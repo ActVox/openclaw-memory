@@ -99,26 +99,35 @@ export const embedMessage = action({
 export const embedAll = action({
   args: {
     limit: v.optional(v.number()),
+    afterTimestamp: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const messages = await ctx.runQuery(
-      internal.vectorSearchHelpers.getUnembedded,
-      {
-        limit: args.limit ?? 100,
-      }
-    );
-
     let count = 0;
-    for (const msg of messages) {
-      const embedding = await getEmbedding(msg.content);
-      await ctx.runMutation(internal.vectorSearchHelpers.updateEmbedding, {
-        id: msg._id,
-        embedding,
-      });
-      count++;
+    let afterTs = args.afterTimestamp;
+    const targetLimit = args.limit ?? 100;
+    
+    // Loop through chunks using timestamp pagination
+    while (count < targetLimit) {
+      const batchSize = Math.min(30, targetLimit - count);
+      const messages = await ctx.runQuery(
+        internal.vectorSearchHelpers.getUnembeddedIds,
+        { limit: batchSize, afterTimestamp: afterTs },
+      );
+      
+      if (messages.length === 0) break;
+      
+      for (const msg of messages) {
+        const embedding = await getEmbedding(msg.content);
+        await ctx.runMutation(internal.vectorSearchHelpers.updateEmbedding, {
+          id: msg._id,
+          embedding,
+        });
+        count++;
+        afterTs = msg.timestamp;
+      }
     }
 
-    return { embedded: count };
+    return { embedded: count, lastTimestamp: afterTs };
   },
 });
 
